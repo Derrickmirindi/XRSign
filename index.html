@@ -53,17 +53,15 @@ input[type=file]{display:none;}
 <h1 class="masthead">XRSign</h1>
 <p class="tagline">Client-side traffic sign detection running entirely in your browser via YOLO + ONNX Runtime Web. No server, no upload.</p>
 <hr class="rule">
-
 <div class="stage" id="stage">
 <video id="video" autoplay muted playsinline style="display:none"></video>
-anvas id="canvas"></canvas>
+<canvas id="canvas"></canvas>
 </div>
-
 <div class="panel">
 <div class="card">
 <h3>Input Source</h3>
 <button class="btn" id="camBtn">Start Camera</button>
-abel class="btn secondary" for="fileInput" style="margin-top:10px;">Upload Image</label>
+<label class="btn secondary" for="fileInput" style="margin-top:10px;display:block;">Upload Image</label>
 <input type="file" id="fileInput" accept="image/*">
 <div class="status" id="status"><b>Status:</b> <span id="statusText">Initializing…</span></div>
 </div>
@@ -72,14 +70,12 @@ abel class="btn secondary" for="fileInput" style="margin-top:10px;">Upload Image
 <div class="legend" id="legend"></div>
 </div>
 </div>
-
 <div class="foot">
 <span>XRSign v1.0</span>
 <span id="fps">0 FPS</span>
 </div>
 </div>
 </div>
-
 <script>
 const CLASSES = ["Green Light","Red Light","Speed Limit 10","Speed Limit 100","Speed Limit 110","Speed Limit 120","Speed Limit 20","Speed Limit 30","Speed Limit 40","Speed Limit 50","Speed Limit 60","Speed Limit 70","Speed Limit 80","Speed Limit 90","Stop"];
 const INPUT_SIZE = 640;
@@ -95,7 +91,7 @@ let running = false;
 let lastTime = performance.now();
 
 const legend = document.getElementById('legend');
-CLASSES.forEach(c=>{
+CLASSES.forEach(function(c){
   const chip = document.createElement('div');
   chip.className='chip';
   chip.textContent=c;
@@ -125,7 +121,7 @@ function letterbox(img, size){
   const nw = img.width*scale, nh = img.height*scale;
   const dx = (size-nw)/2, dy = (size-nh)/2;
   cctx.drawImage(img, dx, dy, nw, nh);
-  return { canvas: c, scale, dx, dy };
+  return { canvas: c, scale: scale, dx: dx, dy: dy };
 }
 
 function preprocess(c){
@@ -150,7 +146,7 @@ function iou(a,b){
 }
 
 function nms(boxes, scores, thresh){
-  const idx = scores.map((s,i)=>i).sort((a,b)=>scores[b]-scores[a]);
+  const idx = scores.map(function(s,i){return i;}).sort(function(a,b){return scores[b]-scores[a];});
   const keep = [];
   while(idx.length){
     const cur = idx.shift();
@@ -163,7 +159,8 @@ function nms(boxes, scores, thresh){
 }
 
 async function runInference(imgEl){
-  const { canvas: lb, scale, dx, dy } = letterbox(imgEl, INPUT_SIZE);
+  const lbResult = letterbox(imgEl, INPUT_SIZE);
+  const lb = lbResult.canvas, scale = lbResult.scale, dx = lbResult.dx, dy = lbResult.dy;
   const tensor = preprocess(lb);
   const feeds = {};
   feeds[session.inputNames[0]] = tensor;
@@ -172,17 +169,28 @@ async function runInference(imgEl){
   const data = output.data;
   const dims = output.dims;
   const numBoxes = dims[2];
-  const numAttrs = dims[1];
   const boxes=[], scores=[], classIds=[];
   for(let i=0;i<numBoxes;i++){
     let maxScore=0, maxClass=0;
     for(let c=0;c<CLASSES.length;c++){
-      const s = data[(4+c)*numBoxes+i];45);
+      const s = data[(4+c)*numBoxes+i];
+      if(s>maxScore){ maxScore=s; maxClass=c; }
+    }
+    if(maxScore>0.35){
+      const cx=data[0*numBoxes+i], cy=data[1*numBoxes+i], w=data[2*numBoxes+i], h=data[3*numBoxes+i];
+      const x1=(cx-w/2-dx)/scale, y1=(cy-h/2-dy)/scale;
+      const x2=(cx+w/2-dx)/scale, y2=(cy+h/2-dy)/scale;
+      boxes.push([x1,y1,x2,y2]);
+      scores.push(maxScore);
+      classIds.push(maxClass);
+    }
+  }
+  const keep = nms(boxes, scores, 0.45);
   ctx.drawImage(imgEl,0,0,canvas.width,canvas.height);
   ctx.lineWidth=3;
   ctx.font='14px Consolas, monospace';
-  keep.forEach(i=>{
-    const [x1,y1,x2,y2]=boxes[i];
+  keep.forEach(function(i){
+    const x1=boxes[i][0], y1=boxes[i][1], x2=boxes[i][2], y2=boxes[i][3];
     const label = CLASSES[classIds[i]] + ' ' + (scores[i]*100).toFixed(1) + '%';
     ctx.strokeStyle = '#0047FF';
     ctx.strokeRect(x1,y1,x2-x1,y2-y1);
@@ -195,8 +203,6 @@ async function runInference(imgEl){
 }
 
 function resizeCanvasToImage(imgEl){
-  const stage = document.getElementById('stage');
-  const rect = stage.getBoundingClientRect();
   canvas.width = imgEl.width || imgEl.videoWidth;
   canvas.height = imgEl.height || imgEl.videoHeight;
 }
@@ -206,13 +212,13 @@ async function processImageElement(imgEl){
   await runInference(imgEl);
 }
 
-fileInput.addEventListener('change', (e)=>{
+fileInput.addEventListener('change', function(e){
   const file = e.target.files[0];
   if(!file) return;
   running = false;
   video.style.display='none';
   const img = new Image();
-  img.onload = async ()=>{
+  img.onload = async function(){
     setStatus('Running inference…');
     await processImageElement(img);
     setStatus('Ready — select an input');
@@ -220,11 +226,11 @@ fileInput.addEventListener('change', (e)=>{
   img.src = URL.createObjectURL(file);
 });
 
-camBtn.addEventListener('click', async ()=>{
+camBtn.addEventListener('click', async function(){
   if(running){
     running = false;
     const stream = video.srcObject;
-    if(stream){ stream.getTracks().forEach(t=>t.stop()); }
+    if(stream){ stream.getTracks().forEach(function(t){t.stop();}); }
     video.style.display='none';
     camBtn.textContent = 'Start Camera';
     setStatus('Ready — select an input');
@@ -259,16 +265,3 @@ loadModel();
 </script>
 </body>
 </html>
-
-      if(s>maxScore){ maxScore=s; maxClass=c; }
-    }
-    if(maxScore>0.35){
-      const cx=data[0*numBoxes+i], cy=data[1*numBoxes+i], w=data[2*numBoxes+i], h=data[3*numBoxes+i];
-      let x1=(cx-w/2-dx)/scale, y1=(cy-h/2-dy)/scale;
-      let x2=(cx+w/2-dx)/scale, y2=(cy+h/2-dy)/scale;
-      boxes.push([x1,y1,x2,y2]);
-      scores.push(maxScore);
-      classIds.push(maxClass);
-    }
-  }
-  const keep = nms(boxes, scores, 0.
