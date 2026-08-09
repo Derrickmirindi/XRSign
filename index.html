@@ -3,109 +3,97 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>XRSign - Real-Time Traffic Sign Detection</title>
+<title>XRSign — Real-Time Traffic Sign Detection</title>
+//fonts.gstatic.com" crossorigin>
+//fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
 <style>
-:root{--maxw:1200px;--margin:48px;--lh:24px;--red:#FF6A00;--gold:#FFC400;--black:#111;--white:#FFF;--gray:#666;}
+:root{
+--cols:12;--bl:8px;--lh:24px;--gutter:24px;--margin:72px;--maxw:1296px;
+--paper:#ffffff;--ink:#111315;--ink-soft:#5b6066;
+--accent:#0047FF;--accent-soft:rgba(0,71,255,.08);
+--gold:#0091FF;
+--g-col:rgba(0,71,255,.075);--g-edge:rgba(0,71,255,.40);
+--g-base:rgba(0,71,255,.34);--g-base-min:rgba(0,71,255,.12);
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{min-height:100vh;font-family:'Helvetica Neue','Arial',sans-serif;font-size:16px;line-height:var(--lh);color:var(--black);background:var(--white);}
-.container{max-width:var(--maxw);margin:0 auto;padding:0 var(--margin);}
-header{padding:48px 0 24px;border-bottom:1px solid var(--black);margin-bottom:32px;}
-.logo{font-size:48px;font-weight:900;letter-spacing:-0.03em;line-height:1;color:var(--red);margin-bottom:8px;}
-.tagline{font-size:18px;color:var(--gray);max-width:60ch;}
-.grid{display:grid;grid-template-columns:1fr 2fr;gap:32px;}
-h4{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;}
-.modes{margin-bottom:24px;}
-.mode-btn{display:block;width:100%;text-align:left;background:var(--white);border:2px solid var(--black);color:var(--black);padding:16px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:8px;}
-.mode-btn.active{background:var(--red);color:var(--white);border-color:var(--red);}
-.notes{font-size:14px;color:var(--gray);}
-.drop-zone{border:2px dashed var(--gray);padding:48px 24px;text-align:center;cursor:pointer;margin-bottom:24px;}
-.drop-zone.drag{border-color:var(--red);background:rgba(255,106,0,0.05);}
-.drop-zone strong{color:var(--red);}
+html,body{background:var(--paper);color:var(--ink);}
+body{font-family:'Inter',system-ui,Helvetica,Arial,sans-serif;font-size:16px;line-height:var(--lh);-webkit-font-smoothing:antialiased;}
+.mono{font-family:'Space Mono',monospace;}
+.spread{position:relative;width:100%;}
+.wrap{position:relative;max-width:var(--maxw);margin:0 auto;padding:48px var(--margin);}
+.grid{display:grid;grid-template-columns:repeat(var(--cols),1fr);column-gap:var(--gutter);row-gap:var(--lh);}
+.band{grid-column:1 / -1;display:grid;grid-template-columns:subgrid;column-gap:var(--gutter);align-items:start;}
+@supports not (grid-template-columns:subgrid){.band{grid-template-columns:repeat(var(--cols),1fr);}}
+.kicker{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:var(--bl);}
+.masthead{font-weight:900;font-size:88px;line-height:88px;letter-spacing:-0.04em;color:var(--ink);grid-column:1 / 9;}
+.tagline{grid-column:1 / 8;font-size:18px;line-height:var(--lh);color:var(--ink-soft);margin-top:var(--lh);}
+.rule{grid-column:1 / -1;height:var(--bl);border-top:2px solid var(--ink);margin-top:var(--lh);}
+h4{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--ink);margin-bottom:var(--bl);}
+.side{grid-column:1 / 4;}
+.mainarea{grid-column:4 / 13;}
+@media(max-width:900px){.side,.mainarea,.masthead,.tagline{grid-column:1 / -1;}.masthead{font-size:56px;line-height:56px;}}
+.modes{margin-bottom:var(--lh);}
+.mode-btn{display:block;width:100%;text-align:left;background:var(--paper);border:1px solid var(--ink);color:var(--ink);padding:12px 16px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:var(--bl);font-family:inherit;}
+.mode-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.notes{font-size:13px;color:var(--ink-soft);}
+.drop-zone{border:1px dashed var(--ink-soft);padding:48px 24px;text-align:center;cursor:pointer;margin-bottom:var(--lh);}
+.drop-zone.drag{border-color:var(--accent);background:var(--accent-soft);}
+.drop-zone strong{color:var(--accent);}
 .hide{display:none!important;}
-.controls{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;}
-.control label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--gray);margin-bottom:8px;}
-input[type=range]{width:100%;accent-color:var(--red);}
-.cam-btns{margin-bottom:24px;}
-.btn{border:2px solid var(--black);background:var(--white);color:var(--black);padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;text-transform:uppercase;margin-right:8px;}
-.btn.primary{background:var(--red);color:var(--white);border-color:var(--red);}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:var(--gutter);margin-bottom:var(--lh);}
+.control label{display:block;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);margin-bottom:var(--bl);}
+input[type=range]{width:100%;accent-color:var(--accent);}
+.cam-btns{margin-bottom:var(--lh);}
+.btn{border:1px solid var(--ink);background:var(--paper);color:var(--ink);padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.05em;margin-right:var(--bl);font-family:'Space Mono',monospace;}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
 .btn:disabled{opacity:0.3;cursor:not-allowed;}
-.canvas-wrap{position:relative;width:100%;min-height:360px;border:2px solid var(--black);margin-bottom:16px;display:flex;align-items:center;justify-content:center;background:var(--black);}
+.canvas-wrap{position:relative;width:100%;min-height:360px;border:1px solid var(--ink);margin-bottom:var(--lh);display:flex;align-items:center;justify-content:center;background:var(--ink);}
 canvas{display:block;max-width:100%;height:auto;}
 video{display:none;}
-.status{display:flex;align-items:center;gap:12px;padding:16px;border:1px solid var(--black);margin-bottom:16px;}
-.status-dot{width:16px;height:16px;border-radius:50%;background:var(--gray);flex:none;}
-.status-dot.on{background:var(--red);}
+.status{display:flex;align-items:center;gap:12px;padding:16px;border:1px solid var(--ink);margin-bottom:var(--lh);font-family:'Space Mono',monospace;font-size:13px;}
+.status-dot{width:12px;height:12px;border-radius:50%;background:var(--ink-soft);flex:none;}
+.status-dot.on{background:var(--accent);}
 .status-dot.busy{background:var(--gold);}
-.status-dot.err{background:var(--black);}
-.progress{height:8px;background:#eee;overflow:hidden;margin-bottom:16px;}
-.progress-bar{height:100%;background:var(--red);width:0;}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;}
-.stat{border:2px solid var(--black);padding:16px;}
-.stat-v{font-size:36px;font-weight:900;line-height:1;color:var(--red);margin-bottom:4px;}
-.stat-k{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray);}
-.detlist{border-top:2px solid var(--black);padding-top:12px;margin-bottom:24px;}
-.det-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #ddd;}
-.det-badge{background:var(--red);color:var(--white);padding:4px 8px;font-size:13px;font-weight:900;}
-.legend{border:2px solid var(--black);margin-top:16px;}
-.legend-head{padding:12px;border-bottom:2px solid var(--black);font-weight:900;text-transform:uppercase;font-size:13px;color:var(--red);}
-.legend-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;}
-.legend-swatch{width:14px;height:14px;border-radius:3px;flex:none;}
-.disclaimer{border-left:4px solid var(--red);padding-left:24px;margin:24px 0 48px;color:var(--gray);font-size:14px;}
-.disclaimer strong{color:var(--black);}
-footer{border-top:2px solid var(--black);padding:32px 0;margin-top:48px;font-size:12px;color:var(--gray);}
-@media(max-width:900px){:root{--margin:24px;}.grid{grid-template-columns:1fr;}.controls{grid-template-columns:1fr;}}
+.status-dot.err{background:#c00;}
+.progress{height:var(--bl);background:#e9edff;overflow:hidden;margin-bottom:var(--lh);}
+.progress-bar{height:100%;background:var(--accent);width:0;}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gutter);margin-bottom:var(--lh);}
+.stat{border:1px solid var(--ink);padding:16px;}
+.stat-v{font-size:48px;font-weight:900;line-height:48px;letter-spacing:-0.03em;color:var(--accent);margin-bottom:var(--bl);}
+.stat-k{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);}
+.detlist{border-top:2px solid var(--ink);padding-top:12px;margin-bottom:var(--lh);}
+.det-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #e6e6e6;}
+.det-badge{background:var(--accent);color:#fff;padding:4px 8px;font-size:12px;font-weight:700;font-family:'Space Mono',monospace;}
+.legend{border:1px solid var(--ink);margin-top:var(--lh);}
+.legend-head{padding:12px;border-bottom:1px solid var(--ink);font-family:'Space Mono',monospace;font-weight:700;text-transform:uppercase;font-size:12px;letter-spacing:.1em;color:var(--accent);}
+.legend-row{display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid #eee;font-size:13px;}
+.legend-swatch{width:12px;height:12px;flex:none;}
+.disclaimer{grid-column:1 / -1;border-left:4px solid var(--accent);padding-left:24px;margin:var(--lh) 0;color:var(--ink-soft);font-size:13px;}
+.disclaimer strong{color:var(--ink);}
+footer{grid-column:1 / -1;border-top:2px solid var(--ink);padding-top:var(--lh);font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.05em;color:var(--ink-soft);}
+.toggle{position:fixed;top:18px;right:18px;z-index:200;display:flex;align-items:center;gap:10px;background:var(--ink);color:#fff;border:none;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:10px 14px;}
+.toggle .dot{width:8px;height:8px;border-radius:50%;background:#555;}
+.grid-on .toggle{background:var(--accent);}
+.grid-on .toggle .dot{background:#fff;}
+.guides{position:absolute;inset:0;pointer-events:none;z-index:60;opacity:0;transition:opacity .26s ease;}
+.grid-on .guides{opacity:1;}
+.guides .cols{position:absolute;top:0;bottom:0;left:var(--margin);right:var(--margin);display:grid;grid-template-columns:repeat(var(--cols),1fr);column-gap:var(--gutter);}
+.guides .col{background:var(--g-col);box-shadow:inset 1px 0 0 var(--g-edge),inset -1px 0 0 var(--g-edge);}
+.guides .rows{position:absolute;left:var(--margin);right:var(--margin);top:0;bottom:0;background-image:repeating-linear-gradient(to bottom,var(--g-base) 0 1px,transparent 1px var(--lh)),repeating-linear-gradient(to bottom,var(--g-base-min) 0 1px,transparent 1px var(--bl));}
 </style>
 </head>
 <body>
-<div class="container">
-<header>
-<div class="logo">XRSign</div>
-<div class="tagline">Real-time traffic sign and signal detection in the browser. Runs a YOLO model locally via ONNX Runtime Web.</div>
-</header>
+<button class="toggle" id="gridToggle" aria-pressed="false"><span class="dot"></span><span class="lbl">Show grid</span></button>
+<section class="spread">
+<div class="wrap">
 <div class="grid">
-<aside>
-<h4>Input Mode</h4>
-<div class="modes">
-<button class="mode-btn active" data-mode="image">Image</button>
-<button class="mode-btn" data-mode="video">Video</button>
-<button class="mode-btn" data-mode="camera">Live Camera</button>
+<div class="band" style="grid-column:1 / -1;">
+<div style="grid-column:1 / -1;" class="kicker">XRSign / YOLO · ONNX Runtime Web · 15 Classes</div>
+<h1 class="masthead">XRSign</h1>
+<p class="tagline">Real-time traffic sign and signal detection, computed entirely in the browser. No images leave your device.</p>
+<div class="rule"></div>
 </div>
-<h4>Model Notes</h4>
-<div class="notes">Loading YOLO model (best.onnx) for 15 traffic-sign classes.</div>
-<div class="legend">
-<div class="legend-head">Detection Classes</div>
-<div id="legendBody"></div>
-</div>
-</aside>
-<main>
-<section id="imagePane">
-<div id="dropZone" class="drop-zone"><strong>Click or drag</strong> a traffic-scene image here</div>
-<input id="fileInput" type="file" class="hide" accept="image/*">
-</section>
-<section id="videoPane" class="hide">
-<div id="videoDrop" class="drop-zone"><strong>Click or drag</strong> a video file here</div>
-<input id="videoInput" type="file" class="hide" accept="video/*">
-<div class="cam-btns"><button id="playVid" class="btn primary" disabled>Play</button><button id="pauseVid" class="btn" disabled>Pause</button></div>
-</section>
-<section id="camPane" class="hide">
-<div class="cam-btns"><button id="startCam" class="btn primary">Start Camera</button><button id="stopCam" class="btn" disabled>Stop</button></div>
-</section>
-<div class="controls">
-<div class="control"><label>Confidence: <span id="confVal">0.25</span></label><input id="confSlider" type="range" min="0.05" max="0.95" step="0.05" value="0.25"></div>
-<div class="control"><label>IoU (NMS): <span id="iouVal">0.45</span></label><input id="iouSlider" type="range" min="0.1" max="0.9" step="0.05" value="0.45"></div>
-</div>
-<div class="status"><span id="dot" class="status-dot busy"></span><span id="statusText">Initializing...</span></div>
-<div id="progressWrap" class="progress hide"><div id="progressBar" class="progress-bar"></div></div>
-<div class="canvas-wrap"><canvas id="canvas" width="640" height="360"></canvas><video id="video" playsinline muted></video></div>
-<div class="stats">
-<div class="stat"><div id="statNotes" class="stat-v">0</div><div class="stat-k">Signs Detected</div></div>
-<div class="stat"><div id="statConf" class="stat-v">-</div><div class="stat-k">Max Confidence</div></div>
-<div class="stat"><div id="statMs" class="stat-v">-</div><div class="stat-k">Inference (ms)</div></div>
-</div>
-<div id="detList" class="detlist"></div>
-</main>
-</div>
-<div class="disclaimer"><strong>Research and educational use only.</strong> Not a certified driver-assistance system. Always follow actual road signs, signals and traffic laws.</div>
-<footer>XRSign - Real-Time Traffic Sign Detection - Powered by ONNX Runtime Web</footer>
-</div>
+<div class="band" style="grid-column:1 / -1;margin-top:var(--lh);">
+<aside class="side">
+<h4>Input
