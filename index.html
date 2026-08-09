@@ -6,11 +6,10 @@
 <title>XRSign — Real-Time Traffic Sign Detection</title>
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
 <style>
-:root{--cols:12;--bl:8px;--lh:24px;--gutter:24px;--margin:72px;--maxw:1296px;--paper:#ffffff;--ink:#111315;--ink-soft:#5b6066;--accent:#0047FF;--accent-soft:rgba(0,71,255,.08);--gold:#0091FF;}
+:root{--cols:12;--bl:8px;--lh:24px;--gutter:24px;--margin:72px;--maxw:1296px;--paper:#ffffff;--ink:#111315;--ink-soft:#5b6066;--accent:#0047FF;--accent-soft:rgba(0,71,255,.08);}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{background:var(--paper);color:var(--ink);}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:var(--lh);-webkit-font-smoothing:antialiased;}
-.mono{font-family:'Consolas','SF Mono',Menlo,monospace;}
 .wrap{position:relative;max-width:var(--maxw);margin:0 auto;padding:48px var(--margin);}
 .grid{display:grid;grid-template-columns:repeat(var(--cols),1fr);column-gap:var(--gutter);row-gap:var(--lh);}
 .kicker{font-family:'Consolas',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:var(--bl);grid-column:1 / 9;}
@@ -22,7 +21,7 @@ hr.rule{grid-column:1 / 13;border:none;border-top:2px solid var(--ink);margin:24
 .panel{grid-column:9 / 13;display:flex;flex-direction:column;gap:16px;}
 .card{border:2px solid var(--ink);padding:20px;}
 .card h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:12px;font-family:'Consolas',monospace;}
-.btn{display:block;width:100%;padding:14px;margin-bottom:10px;background:var(--accent);color:#fff;border:2px solid var(--accent);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;text-align:center;transition:background .15s;}
+.btn{display:block;width:100%;padding:14px;margin-bottom:10px;background:var(--accent);color:#fff;border:2px solid var(--accent);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;text-align:center;}
 .btn:last-child{margin-bottom:0;}
 .btn:hover{background:#0036c9;}
 .btn.secondary{background:#fff;color:var(--accent);}
@@ -62,13 +61,13 @@ input[type=file]{display:none;}
 <div class="legend" id="legend"></div>
 </div>
 </div>
-<div class="foot"><span>XRSign v1.1</span><span id="fps">0 FPS</span></div>
+<div class="foot"><span id="dbg">XRSign v1.2</span><span id="fps">0 FPS</span></div>
 </div>
 </div>
 <script>
 const CLASSES=["Green Light","Red Light","Speed Limit 10","Speed Limit 100","Speed Limit 110","Speed Limit 120","Speed Limit 20","Speed Limit 30","Speed Limit 40","Speed Limit 50","Speed Limit 60","Speed Limit 70","Speed Limit 80","Speed Limit 90","Stop"];
-const INPUT_SIZE=640;const CONF=0.30;const IOU=0.45;
-let session=null;
+const NC=CLASSES.length;const INPUT_SIZE=640;const CONF=0.5;const IOU=0.45;
+let session=null,mode=null,running=false,lastTime=performance.now(),layout=null;
 const video=document.getElementById('video');
 const canvas=document.getElementById('canvas');
 const ctx=canvas.getContext('2d');
@@ -79,23 +78,24 @@ const vidBtn=document.getElementById('vidBtn');
 const imgInput=document.getElementById('imgInput');
 const vidInput=document.getElementById('vidInput');
 const fpsEl=document.getElementById('fps');
+const dbg=document.getElementById('dbg');
 const legend=document.getElementById('legend');
-let mode=null;let running=false;let lastTime=performance.now();
 CLASSES.forEach(function(c){const chip=document.createElement('div');chip.className='chip';chip.textContent=c;legend.appendChild(chip);});
 function setStatus(t){statusText.textContent=t;}
-async function loadModel(){try{setStatus('Loading model…');session=await ort.InferenceSession.create('./best.onnx',{executionProviders:['wasm']});setStatus('Ready — select an input');}catch(e){setStatus('Model load failed: '+e.message);console.error(e);}}
+function sigmoid(x){return 1/(1+Math.exp(-x));}
+async function loadModel(){try{setStatus('Loading model…');session=await ort.InferenceSession.create('./best.onnx',{executionProviders:['wasm']});setStatus('Ready — select an input');}catch(e){setStatus('Model load failed: '+e.message);}}
 function letterbox(img,size){const c=document.createElement('canvas');c.width=size;c.height=size;const cc=c.getContext('2d');cc.fillStyle='#727272';cc.fillRect(0,0,size,size);const iw=img.videoWidth||img.width;const ih=img.videoHeight||img.height;const scale=Math.min(size/iw,size/ih);const nw=iw*scale,nh=ih*scale;const dx=(size-nw)/2,dy=(size-nh)/2;cc.drawImage(img,dx,dy,nw,nh);return{canvas:c,scale:scale,dx:dx,dy:dy,iw:iw,ih:ih};}
 function preprocess(c){const cc=c.getContext('2d');const d=cc.getImageData(0,0,c.width,c.height).data;const s=c.width;const f=new Float32Array(3*s*s);for(let i=0;i<s*s;i++){f[i]=d[i*4]/255;f[s*s+i]=d[i*4+1]/255;f[2*s*s+i]=d[i*4+2]/255;}return new ort.Tensor('float32',f,[1,3,s,s]);}
 function iou(a,b){const x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]);const x2=Math.min(a[2],b[2]),y2=Math.min(a[3],b[3]);const inter=Math.max(0,x2-x1)*Math.max(0,y2-y1);const aA=(a[2]-a[0])*(a[3]-a[1]),aB=(b[2]-b[0])*(b[3]-b[1]);return inter/(aA+aB-inter);}
 function nms(boxes,scores,th){const idx=scores.map(function(s,i){return i;}).sort(function(a,b){return scores[b]-scores[a];});const keep=[];while(idx.length){const cur=idx.shift();keep.push(cur);for(let i=idx.length-1;i>=0;i--){if(iou(boxes[cur],boxes[idx[i]])>th)idx.splice(i,1);}}return keep;}
-async function runInference(srcEl){const lb=letterbox(srcEl,INPUT_SIZE);const tensor=preprocess(lb.canvas);const feeds={};feeds[session.inputNames[0]]=tensor;const results=await session.run(feeds);const out=results[session.outputNames[0]];const data=out.data;const dims=out.dims;const nc=CLASSES.length;const attrs=4+nc;let numBoxes,transposed;if(dims[1]===attrs){numBoxes=dims[2];transposed=true;}else{numBoxes=dims[1];transposed=false;}
-function at(i,a){return transposed?data[a*numBoxes+i]:data[i*attrs+a];}
-const boxes=[],scores=[],classIds=[];for(let i=0;i<numBoxes;i++){let maxScore=0,maxClass=0;for(let c=0;c<nc;c++){const s=at(i,4+c);if(s>maxScore){maxScore=s;maxClass=c;}}if(maxScore>CONF){const cx=at(i,0),cy=at(i,1),w=at(i,2),h=at(i,3);const x1=(cx-w/2-lb.dx)/lb.scale,y1=(cy-h/2-lb.dy)/lb.scale;const x2=(cx+w/2-lb.dx)/lb.scale,y2=(cy+h/2-lb.dy)/lb.scale;boxes.push([x1,y1,x2,y2]);scores.push(Math.min(maxScore,1));classIds.push(maxClass);}}
-const keep=nms(boxes,scores,IOU);const sx=canvas.width/lb.iw,sy=canvas.height/lb.ih;ctx.drawImage(srcEl,0,0,canvas.width,canvas.height);ctx.lineWidth=3;ctx.font='16px Consolas, monospace';keep.forEach(function(i){const x1=boxes[i][0]*sx,y1=boxes[i][1]*sy,x2=boxes[i][2]*sx,y2=boxes[i][3]*sy;const label=CLASSES[classIds[i]]+' '+(scores[i]*100).toFixed(1)+'%';ctx.strokeStyle='#0047FF';ctx.strokeRect(x1,y1,x2-x1,y2-y1);const tw=ctx.measureText(label).width;ctx.fillStyle='#0047FF';ctx.fillRect(x1,y1-22,tw+10,22);ctx.fillStyle='#fff';ctx.fillText(label,x1+5,y1-6);});}
+function analyze(out){const dims=out.dims;const d1=dims[1],d2=dims[2];const v8=4+NC,v5=5+NC;let attrs,numBoxes,transposed;if(d1===v8||d1===v5){attrs=d1;numBoxes=d2;transposed=true;}else if(d2===v8||d2===v5){attrs=d2;numBoxes=d1;transposed=false;}else{if(d1<d2){attrs=d1;numBoxes=d2;transposed=true;}else{attrs=d2;numBoxes=d1;transposed=false;}}const hasObj=(attrs===v5);const data=out.data;let mx=0;for(let k=0;k<Math.min(data.length,5000);k++){const a=Math.abs(data[k]);if(a>mx)mx=a;}const needSig=mx>1.05;return{attrs:attrs,numBoxes:numBoxes,transposed:transposed,hasObj:hasObj,needSig:needSig,dims:dims};}
+async function runInference(srcEl){const lb=letterbox(srcEl,INPUT_SIZE);const tensor=preprocess(lb.canvas);const feeds={};feeds[session.inputNames[0]]=tensor;const results=await session.run(feeds);const out=results[session.outputNames[0]];if(!layout){layout=analyze(out);dbg.textContent='dims['+layout.dims.join(',')+'] attrs'+layout.attrs+(layout.hasObj?' obj':'')+(layout.needSig?' sig':'');}const data=out.data;const N=layout.numBoxes,A=layout.attrs,T=layout.transposed,OBJ=layout.hasObj,SIG=layout.needSig;function at(i,a){return T?data[a*N+i]:data[i*A+a];}
+const boxes=[],scores=[],classIds=[];const clsStart=OBJ?5:4;for(let i=0;i<N;i++){let obj=1;if(OBJ){obj=at(i,4);if(SIG)obj=sigmoid(obj);}let maxScore=0,maxClass=0;for(let c=0;c<NC;c++){let s=at(i,clsStart+c);if(SIG)s=sigmoid(s);if(s>maxScore){maxScore=s;maxClass=c;}}const conf=maxScore*obj;if(conf>CONF){let cx=at(i,0),cy=at(i,1),w=at(i,2),h=at(i,3);const x1=(cx-w/2-lb.dx)/lb.scale,y1=(cy-h/2-lb.dy)/lb.scale;const x2=(cx+w/2-lb.dx)/lb.scale,y2=(cy+h/2-lb.dy)/lb.scale;boxes.push([x1,y1,x2,y2]);scores.push(conf);classIds.push(maxClass);}}
+const keep=nms(boxes,scores,IOU);const sx=canvas.width/lb.iw,sy=canvas.height/lb.ih;ctx.drawImage(srcEl,0,0,canvas.width,canvas.height);ctx.lineWidth=3;ctx.font='16px Consolas, monospace';keep.forEach(function(i){const x1=boxes[i][0]*sx,y1=boxes[i][1]*sy,x2=boxes[i][2]*sx,y2=boxes[i][3]*sy;const label=CLASSES[classIds[i]]+' '+(scores[i]*100).toFixed(1)+'%';ctx.strokeStyle='#0047FF';ctx.strokeRect(x1,y1,x2-x1,y2-y1);const tw=ctx.measureText(label).width;ctx.fillStyle='#0047FF';ctx.fillRect(x1,y1-22,tw+10,22);ctx.fillStyle='#fff';ctx.fillText(label,x1+5,y1-6);});return keep.length;}
 function sizeCanvas(el){canvas.width=el.videoWidth||el.width;canvas.height=el.videoHeight||el.height;}
 imgBtn.addEventListener('click',function(){imgInput.click();});
 vidBtn.addEventListener('click',function(){vidInput.click();});
-imgInput.addEventListener('change',function(e){const file=e.target.files[0];if(!file||!session)return;stopAll();const img=new Image();img.onload=async function(){sizeCanvas(img);setStatus('Running inference…');await runInference(img);setStatus('Ready — image processed');};img.src=URL.createObjectURL(file);});
+imgInput.addEventListener('change',function(e){const file=e.target.files[0];if(!file||!session)return;stopAll();const img=new Image();img.onload=async function(){sizeCanvas(img);setStatus('Running inference…');const n=await runInference(img);setStatus('Done — '+n+' detections');};img.src=URL.createObjectURL(file);});
 vidInput.addEventListener('change',function(e){const file=e.target.files[0];if(!file||!session)return;stopAll();mode='video';video.srcObject=null;video.src=URL.createObjectURL(file);video.loop=true;video.muted=true;video.style.display='block';video.onloadeddata=async function(){sizeCanvas(video);await video.play();running=true;setStatus('Running video…');loop();};});
 camBtn.addEventListener('click',async function(){if(running&&mode==='camera'){stopAll();camBtn.textContent='Start Camera';setStatus('Ready — select an input');return;}stopAll();try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});mode='camera';video.srcObject=stream;video.src='';video.style.display='block';await video.play();sizeCanvas(video);running=true;camBtn.textContent='Stop Camera';setStatus('Running…');loop();}catch(e){setStatus('Camera error: '+e.message);}});
 function stopAll(){running=false;if(video.srcObject){video.srcObject.getTracks().forEach(function(t){t.stop();});video.srcObject=null;}video.pause();video.removeAttribute('src');video.style.display='none';camBtn.textContent='Start Camera';}
