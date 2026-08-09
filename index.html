@@ -32,6 +32,13 @@ input[type=file]{display:none;}
 .status b{color:var(--ink);}
 .legend{display:flex;flex-wrap:wrap;gap:8px;}
 .chip{font-family:'Consolas',monospace;font-size:11px;padding:4px 8px;border:1px solid var(--ink);background:var(--accent-soft);}
+.chat-log{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;margin-bottom:12px;font-size:14px;line-height:1.4;}
+.chat-msg{padding:8px 10px;border:1px solid var(--ink);}
+.chat-msg.user{background:var(--accent-soft);border-color:var(--accent);}
+.chat-msg.bot{background:#f6f6f6;}
+.chat-role{font-family:'Consolas',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:4px;display:block;}
+.chat-input{width:100%;padding:10px;border:2px solid var(--ink);font-family:inherit;font-size:14px;margin-bottom:10px;resize:vertical;min-height:60px;}
+.chat-empty{font-family:'Consolas',monospace;font-size:12px;color:var(--ink-soft);}
 .foot{grid-column:1 / 13;margin-top:48px;padding-top:16px;border-top:2px solid var(--ink);font-family:'Consolas',monospace;font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;}
 @media(max-width:900px){.wrap{padding:32px 20px;}.masthead{font-size:36px;}.stage,.panel,.tagline,.kicker{grid-column:1 / 13;}}
 </style>
@@ -58,16 +65,23 @@ input[type=file]{display:none;}
 <div class="status">Status: <b id="statusText">Initializing…</b></div>
 </div>
 <div class="card">
+<h3>Ask Agent</h3>
+<div class="chat-log" id="chatLog"><div class="chat-empty">Ask anything about traffic signs…</div></div>
+<textarea class="chat-input" id="chatInput" placeholder="e.g. What does a yield sign mean?"></textarea>
+<button class="btn" id="askBtn">Ask</button>
+</div>
+<div class="card">
 <h3>Classes</h3>
 <div class="legend" id="legend"></div>
 </div>
 </div>
-<div class="foot"><span id="dbg">XRSign v1.3</span><span id="fps">0 FPS</span></div>
+<div class="foot"><span id="dbg">XRSign v1.4</span><span id="fps">0 FPS</span></div>
 </div>
 </div>
 <script>
 const CLASSES=["Green Light","Red Light","Speed Limit 10","Speed Limit 100","Speed Limit 110","Speed Limit 120","Speed Limit 20","Speed Limit 30","Speed Limit 40","Speed Limit 50","Speed Limit 60","Speed Limit 70","Speed Limit 80","Speed Limit 90","Stop"];
 const NC=CLASSES.length;const INPUT_SIZE=640;const CONF=0.4;
+const AGENT_URL="https://xrsign-gemini.mirindiderick.workers.dev/";
 let session=null,mode=null,running=false,lastTime=performance.now(),shown=false;
 const video=document.getElementById('video');
 const canvas=document.getElementById('canvas');
@@ -97,6 +111,14 @@ vidInput.addEventListener('change',function(e){const file=e.target.files[0];if(!
 camBtn.addEventListener('click',async function(){if(!session)return;if(running&&mode==='camera'){stopAll();camBtn.textContent='Start Camera';setStatus('Model loaded — select an input');return;}stopAll();try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});mode='camera';video.srcObject=stream;video.src='';video.style.display='block';await video.play();sizeCanvas(video);running=true;camBtn.textContent='Stop Camera';setStatus('Running…');loop();}catch(e){setStatus('Camera error: '+e.message);}});
 function stopAll(){running=false;if(video.srcObject){video.srcObject.getTracks().forEach(function(t){t.stop();});video.srcObject=null;}video.pause();video.removeAttribute('src');video.style.display='none';camBtn.textContent='Start Camera';}
 async function loop(){if(!running)return;sizeCanvas(video);await runInference(video);const now=performance.now();fpsEl.textContent=(1000/(now-lastTime)).toFixed(1)+' FPS';lastTime=now;requestAnimationFrame(loop);}
+const chatLog=document.getElementById('chatLog');
+const chatInput=document.getElementById('chatInput');
+const askBtn=document.getElementById('askBtn');
+let emptyCleared=false;
+function addMsg(role,text){if(!emptyCleared){chatLog.innerHTML='';emptyCleared=true;}const wrap=document.createElement('div');wrap.className='chat-msg '+(role==='user'?'user':'bot');const r=document.createElement('span');r.className='chat-role';r.textContent=(role==='user'?'You':'Agent');const b=document.createElement('div');b.textContent=text;wrap.appendChild(r);wrap.appendChild(b);chatLog.appendChild(wrap);chatLog.scrollTop=chatLog.scrollHeight;return b;}
+async function askAgent(){const q=chatInput.value.trim();if(!q)return;addMsg('user',q);chatInput.value='';askBtn.disabled=true;const pending=addMsg('bot','Thinking…');try{const resp=await fetch(AGENT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:q})});const data=await resp.json();if(!resp.ok){pending.textContent='Error: '+(data.error||resp.status);}else{pending.textContent=data.text||'No response.';}}catch(err){pending.textContent='Network error: '+err.message;}finally{askBtn.disabled=false;chatLog.scrollTop=chatLog.scrollHeight;}}
+askBtn.addEventListener('click',askAgent);
+chatInput.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();askAgent();}});
 loadModel();
 </script>
 </body>
