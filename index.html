@@ -6,14 +6,7 @@
 <title>XRSign — Real-Time Traffic Sign Detection</title>
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
 <style>
-:root{
---cols:12;--bl:8px;--lh:24px;--gutter:24px;--margin:72px;--maxw:1296px;
---paper:#ffffff;--ink:#111315;--ink-soft:#5b6066;
---accent:#0047FF;--accent-soft:rgba(0,71,255,.08);
---gold:#0091FF;
---g-col:rgba(0,71,255,.075);--g-edge:rgba(0,71,255,.40);
---g-base:rgba(0,71,255,.34);--g-base-min:rgba(0,71,255,.12);
-}
+:root{--cols:12;--bl:8px;--lh:24px;--gutter:24px;--margin:72px;--maxw:1296px;--paper:#ffffff;--ink:#111315;--ink-soft:#5b6066;--accent:#0047FF;--accent-soft:rgba(0,71,255,.08);--gold:#0091FF;}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{background:var(--paper);color:var(--ink);}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:var(--lh);-webkit-font-smoothing:antialiased;}
@@ -29,7 +22,8 @@ hr.rule{grid-column:1 / 13;border:none;border-top:2px solid var(--ink);margin:24
 .panel{grid-column:9 / 13;display:flex;flex-direction:column;gap:16px;}
 .card{border:2px solid var(--ink);padding:20px;}
 .card h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:12px;font-family:'Consolas',monospace;}
-.btn{display:block;width:100%;padding:14px;background:var(--accent);color:#fff;border:2px solid var(--accent);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;text-align:center;transition:background .15s;}
+.btn{display:block;width:100%;padding:14px;margin-bottom:10px;background:var(--accent);color:#fff;border:2px solid var(--accent);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;text-align:center;transition:background .15s;}
+.btn:last-child{margin-bottom:0;}
 .btn:hover{background:#0036c9;}
 .btn.secondary{background:#fff;color:var(--accent);}
 .btn.secondary:hover{background:var(--accent-soft);}
@@ -39,11 +33,7 @@ input[type=file]{display:none;}
 .legend{display:flex;flex-wrap:wrap;gap:8px;}
 .chip{font-family:'Consolas',monospace;font-size:11px;padding:4px 8px;border:1px solid var(--ink);background:var(--accent-soft);}
 .foot{grid-column:1 / 13;margin-top:48px;padding-top:16px;border-top:2px solid var(--ink);font-family:'Consolas',monospace;font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;}
-@media(max-width:900px){
-.wrap{padding:32px 20px;}
-.masthead{font-size:36px;}
-.stage,.panel,.tagline,.kicker{grid-column:1 / 13;}
-}
+@media(max-width:900px){.wrap{padding:32px 20px;}.masthead{font-size:36px;}.stage,.panel,.tagline,.kicker{grid-column:1 / 13;}}
 </style>
 </head>
 <body>
@@ -61,206 +51,55 @@ input[type=file]{display:none;}
 <div class="card">
 <h3>Input Source</h3>
 <button class="btn" id="camBtn">Start Camera</button>
-<label class="btn secondary" for="fileInput" style="margin-top:10px;display:block;">Upload Image</label>
-<input type="file" id="fileInput" accept="image/*">
-<div class="status" id="status"><b>Status:</b> <span id="statusText">Initializing…</span></div>
+<button class="btn secondary" id="imgBtn">Upload Image</button>
+<button class="btn secondary" id="vidBtn">Upload Video</button>
+<input type="file" id="imgInput" accept="image/*">
+<input type="file" id="vidInput" accept="video/*">
+<div class="status">Status: <b id="statusText">Initializing…</b></div>
 </div>
 <div class="card">
 <h3>Classes</h3>
 <div class="legend" id="legend"></div>
 </div>
 </div>
-<div class="foot">
-<span>XRSign v1.0</span>
-<span id="fps">0 FPS</span>
-</div>
+<div class="foot"><span>XRSign v1.1</span><span id="fps">0 FPS</span></div>
 </div>
 </div>
 <script>
-const CLASSES = ["Green Light","Red Light","Speed Limit 10","Speed Limit 100","Speed Limit 110","Speed Limit 120","Speed Limit 20","Speed Limit 30","Speed Limit 40","Speed Limit 50","Speed Limit 60","Speed Limit 70","Speed Limit 80","Speed Limit 90","Stop"];
-const INPUT_SIZE = 640;
-let session = null;
-let video = document.getElementById('video');
-let canvas = document.getElementById('canvas');
-let ctx = canvas.getContext('2d');
-let statusText = document.getElementById('statusText');
-let camBtn = document.getElementById('camBtn');
-let fileInput = document.getElementById('fileInput');
-let fpsEl = document.getElementById('fps');
-let running = false;
-let lastTime = performance.now();
-
-const legend = document.getElementById('legend');
-CLASSES.forEach(function(c){
-  const chip = document.createElement('div');
-  chip.className='chip';
-  chip.textContent=c;
-  legend.appendChild(chip);
-});
-
-function setStatus(t){ statusText.textContent = t; }
-
-async function loadModel(){
-  try{
-    setStatus('Loading model…');
-    session = await ort.InferenceSession.create('./best.onnx', { executionProviders: ['wasm'] });
-    setStatus('Ready — select an input');
-  }catch(e){
-    setStatus('Model load failed: ' + e.message);
-    console.error(e);
-  }
-}
-
-function letterbox(img, size){
-  const c = document.createElement('canvas');
-  c.width = size; c.height = size;
-  const cctx = c.getContext('2d');
-  cctx.fillStyle = '#727272';
-  cctx.fillRect(0,0,size,size);
-  const scale = Math.min(size/img.width, size/img.height);
-  const nw = img.width*scale, nh = img.height*scale;
-  const dx = (size-nw)/2, dy = (size-nh)/2;
-  cctx.drawImage(img, dx, dy, nw, nh);
-  return { canvas: c, scale: scale, dx: dx, dy: dy };
-}
-
-function preprocess(c){
-  const cctx = c.getContext('2d');
-  const imgData = cctx.getImageData(0,0,c.width,c.height).data;
-  const size = c.width;
-  const float32 = new Float32Array(3*size*size);
-  for(let i=0;i<size*size;i++){
-    float32[i] = imgData[i*4]/255;
-    float32[size*size+i] = imgData[i*4+1]/255;
-    float32[2*size*size+i] = imgData[i*4+2]/255;
-  }
-  return new ort.Tensor('float32', float32, [1,3,size,size]);
-}
-
-function iou(a,b){
-  const x1=Math.max(a[0],b[0]), y1=Math.max(a[1],b[1]);
-  const x2=Math.min(a[2],b[2]), y2=Math.min(a[3],b[3]);
-  const inter=Math.max(0,x2-x1)*Math.max(0,y2-y1);
-  const areaA=(a[2]-a[0])*(a[3]-a[1]), areaB=(b[2]-b[0])*(b[3]-b[1]);
-  return inter/(areaA+areaB-inter);
-}
-
-function nms(boxes, scores, thresh){
-  const idx = scores.map(function(s,i){return i;}).sort(function(a,b){return scores[b]-scores[a];});
-  const keep = [];
-  while(idx.length){
-    const cur = idx.shift();
-    keep.push(cur);
-    for(let i=idx.length-1;i>=0;i--){
-      if(iou(boxes[cur], boxes[idx[i]]) > thresh) idx.splice(i,1);
-    }
-  }
-  return keep;
-}
-
-async function runInference(imgEl){
-  const lbResult = letterbox(imgEl, INPUT_SIZE);
-  const lb = lbResult.canvas, scale = lbResult.scale, dx = lbResult.dx, dy = lbResult.dy;
-  const tensor = preprocess(lb);
-  const feeds = {};
-  feeds[session.inputNames[0]] = tensor;
-  const results = await session.run(feeds);
-  const output = results[session.outputNames[0]];
-  const data = output.data;
-  const dims = output.dims;
-  const numBoxes = dims[2];
-  const boxes=[], scores=[], classIds=[];
-  for(let i=0;i<numBoxes;i++){
-    let maxScore=0, maxClass=0;
-    for(let c=0;c<CLASSES.length;c++){
-      const s = data[(4+c)*numBoxes+i];
-      if(s>maxScore){ maxScore=s; maxClass=c; }
-    }
-    if(maxScore>0.35){
-      const cx=data[0*numBoxes+i], cy=data[1*numBoxes+i], w=data[2*numBoxes+i], h=data[3*numBoxes+i];
-      const x1=(cx-w/2-dx)/scale, y1=(cy-h/2-dy)/scale;
-      const x2=(cx+w/2-dx)/scale, y2=(cy+h/2-dy)/scale;
-      boxes.push([x1,y1,x2,y2]);
-      scores.push(maxScore);
-      classIds.push(maxClass);
-    }
-  }
-  const keep = nms(boxes, scores, 0.45);
-  ctx.drawImage(imgEl,0,0,canvas.width,canvas.height);
-  ctx.lineWidth=3;
-  ctx.font='14px Consolas, monospace';
-  keep.forEach(function(i){
-    const x1=boxes[i][0], y1=boxes[i][1], x2=boxes[i][2], y2=boxes[i][3];
-    const label = CLASSES[classIds[i]] + ' ' + (scores[i]*100).toFixed(1) + '%';
-    ctx.strokeStyle = '#0047FF';
-    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
-    const tw = ctx.measureText(label).width;
-    ctx.fillStyle = '#0047FF';
-    ctx.fillRect(x1, y1-20, tw+10, 20);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(label, x1+5, y1-5);
-  });
-}
-
-function resizeCanvasToImage(imgEl){
-  canvas.width = imgEl.width || imgEl.videoWidth;
-  canvas.height = imgEl.height || imgEl.videoHeight;
-}
-
-async function processImageElement(imgEl){
-  resizeCanvasToImage(imgEl);
-  await runInference(imgEl);
-}
-
-fileInput.addEventListener('change', function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  running = false;
-  video.style.display='none';
-  const img = new Image();
-  img.onload = async function(){
-    setStatus('Running inference…');
-    await processImageElement(img);
-    setStatus('Ready — select an input');
-  };
-  img.src = URL.createObjectURL(file);
-});
-
-camBtn.addEventListener('click', async function(){
-  if(running){
-    running = false;
-    const stream = video.srcObject;
-    if(stream){ stream.getTracks().forEach(function(t){t.stop();}); }
-    video.style.display='none';
-    camBtn.textContent = 'Start Camera';
-    setStatus('Ready — select an input');
-    return;
-  }
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    video.srcObject = stream;
-    video.style.display='block';
-    await video.play();
-    running = true;
-    camBtn.textContent = 'Stop Camera';
-    setStatus('Running…');
-    loopCamera();
-  }catch(e){
-    setStatus('Camera error: ' + e.message);
-  }
-});
-
-async function loopCamera(){
-  if(!running) return;
-  resizeCanvasToImage(video);
-  await runInference(video);
-  const now = performance.now();
-  const fps = 1000/(now-lastTime);
-  lastTime = now;
-  fpsEl.textContent = fps.toFixed(1) + ' FPS';
-  requestAnimationFrame(loopCamera);
-}
-
+const CLASSES=["Green Light","Red Light","Speed Limit 10","Speed Limit 100","Speed Limit 110","Speed Limit 120","Speed Limit 20","Speed Limit 30","Speed Limit 40","Speed Limit 50","Speed Limit 60","Speed Limit 70","Speed Limit 80","Speed Limit 90","Stop"];
+const INPUT_SIZE=640;const CONF=0.30;const IOU=0.45;
+let session=null;
+const video=document.getElementById('video');
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+const statusText=document.getElementById('statusText');
+const camBtn=document.getElementById('camBtn');
+const imgBtn=document.getElementById('imgBtn');
+const vidBtn=document.getElementById('vidBtn');
+const imgInput=document.getElementById('imgInput');
+const vidInput=document.getElementById('vidInput');
+const fpsEl=document.getElementById('fps');
+const legend=document.getElementById('legend');
+let mode=null;let running=false;let lastTime=performance.now();
+CLASSES.forEach(function(c){const chip=document.createElement('div');chip.className='chip';chip.textContent=c;legend.appendChild(chip);});
+function setStatus(t){statusText.textContent=t;}
+async function loadModel(){try{setStatus('Loading model…');session=await ort.InferenceSession.create('./best.onnx',{executionProviders:['wasm']});setStatus('Ready — select an input');}catch(e){setStatus('Model load failed: '+e.message);console.error(e);}}
+function letterbox(img,size){const c=document.createElement('canvas');c.width=size;c.height=size;const cc=c.getContext('2d');cc.fillStyle='#727272';cc.fillRect(0,0,size,size);const iw=img.videoWidth||img.width;const ih=img.videoHeight||img.height;const scale=Math.min(size/iw,size/ih);const nw=iw*scale,nh=ih*scale;const dx=(size-nw)/2,dy=(size-nh)/2;cc.drawImage(img,dx,dy,nw,nh);return{canvas:c,scale:scale,dx:dx,dy:dy,iw:iw,ih:ih};}
+function preprocess(c){const cc=c.getContext('2d');const d=cc.getImageData(0,0,c.width,c.height).data;const s=c.width;const f=new Float32Array(3*s*s);for(let i=0;i<s*s;i++){f[i]=d[i*4]/255;f[s*s+i]=d[i*4+1]/255;f[2*s*s+i]=d[i*4+2]/255;}return new ort.Tensor('float32',f,[1,3,s,s]);}
+function iou(a,b){const x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]);const x2=Math.min(a[2],b[2]),y2=Math.min(a[3],b[3]);const inter=Math.max(0,x2-x1)*Math.max(0,y2-y1);const aA=(a[2]-a[0])*(a[3]-a[1]),aB=(b[2]-b[0])*(b[3]-b[1]);return inter/(aA+aB-inter);}
+function nms(boxes,scores,th){const idx=scores.map(function(s,i){return i;}).sort(function(a,b){return scores[b]-scores[a];});const keep=[];while(idx.length){const cur=idx.shift();keep.push(cur);for(let i=idx.length-1;i>=0;i--){if(iou(boxes[cur],boxes[idx[i]])>th)idx.splice(i,1);}}return keep;}
+async function runInference(srcEl){const lb=letterbox(srcEl,INPUT_SIZE);const tensor=preprocess(lb.canvas);const feeds={};feeds[session.inputNames[0]]=tensor;const results=await session.run(feeds);const out=results[session.outputNames[0]];const data=out.data;const dims=out.dims;const nc=CLASSES.length;const attrs=4+nc;let numBoxes,transposed;if(dims[1]===attrs){numBoxes=dims[2];transposed=true;}else{numBoxes=dims[1];transposed=false;}
+function at(i,a){return transposed?data[a*numBoxes+i]:data[i*attrs+a];}
+const boxes=[],scores=[],classIds=[];for(let i=0;i<numBoxes;i++){let maxScore=0,maxClass=0;for(let c=0;c<nc;c++){const s=at(i,4+c);if(s>maxScore){maxScore=s;maxClass=c;}}if(maxScore>CONF){const cx=at(i,0),cy=at(i,1),w=at(i,2),h=at(i,3);const x1=(cx-w/2-lb.dx)/lb.scale,y1=(cy-h/2-lb.dy)/lb.scale;const x2=(cx+w/2-lb.dx)/lb.scale,y2=(cy+h/2-lb.dy)/lb.scale;boxes.push([x1,y1,x2,y2]);scores.push(Math.min(maxScore,1));classIds.push(maxClass);}}
+const keep=nms(boxes,scores,IOU);const sx=canvas.width/lb.iw,sy=canvas.height/lb.ih;ctx.drawImage(srcEl,0,0,canvas.width,canvas.height);ctx.lineWidth=3;ctx.font='16px Consolas, monospace';keep.forEach(function(i){const x1=boxes[i][0]*sx,y1=boxes[i][1]*sy,x2=boxes[i][2]*sx,y2=boxes[i][3]*sy;const label=CLASSES[classIds[i]]+' '+(scores[i]*100).toFixed(1)+'%';ctx.strokeStyle='#0047FF';ctx.strokeRect(x1,y1,x2-x1,y2-y1);const tw=ctx.measureText(label).width;ctx.fillStyle='#0047FF';ctx.fillRect(x1,y1-22,tw+10,22);ctx.fillStyle='#fff';ctx.fillText(label,x1+5,y1-6);});}
+function sizeCanvas(el){canvas.width=el.videoWidth||el.width;canvas.height=el.videoHeight||el.height;}
+imgBtn.addEventListener('click',function(){imgInput.click();});
+vidBtn.addEventListener('click',function(){vidInput.click();});
+imgInput.addEventListener('change',function(e){const file=e.target.files[0];if(!file||!session)return;stopAll();const img=new Image();img.onload=async function(){sizeCanvas(img);setStatus('Running inference…');await runInference(img);setStatus('Ready — image processed');};img.src=URL.createObjectURL(file);});
+vidInput.addEventListener('change',function(e){const file=e.target.files[0];if(!file||!session)return;stopAll();mode='video';video.srcObject=null;video.src=URL.createObjectURL(file);video.loop=true;video.muted=true;video.style.display='block';video.onloadeddata=async function(){sizeCanvas(video);await video.play();running=true;setStatus('Running video…');loop();};});
+camBtn.addEventListener('click',async function(){if(running&&mode==='camera'){stopAll();camBtn.textContent='Start Camera';setStatus('Ready — select an input');return;}stopAll();try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});mode='camera';video.srcObject=stream;video.src='';video.style.display='block';await video.play();sizeCanvas(video);running=true;camBtn.textContent='Stop Camera';setStatus('Running…');loop();}catch(e){setStatus('Camera error: '+e.message);}});
+function stopAll(){running=false;if(video.srcObject){video.srcObject.getTracks().forEach(function(t){t.stop();});video.srcObject=null;}video.pause();video.removeAttribute('src');video.style.display='none';camBtn.textContent='Start Camera';}
+async function loop(){if(!running)return;sizeCanvas(video);await runInference(video);const now=performance.now();fpsEl.textContent=(1000/(now-lastTime)).toFixed(1)+' FPS';lastTime=now;requestAnimationFrame(loop);}
 loadModel();
 </script>
 </body>
