@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>XRSign — Real-Time Traffic Sign Detection</title>
-//fonts.gstatic.com" crossorigin>
-//fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
 <style>
 :root{
@@ -18,82 +16,259 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{background:var(--paper);color:var(--ink);}
-body{font-family:'Inter',system-ui,Helvetica,Arial,sans-serif;font-size:16px;line-height:var(--lh);-webkit-font-smoothing:antialiased;}
-.mono{font-family:'Space Mono',monospace;}
-.spread{position:relative;width:100%;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:var(--lh);-webkit-font-smoothing:antialiased;}
+.mono{font-family:'Consolas','SF Mono',Menlo,monospace;}
 .wrap{position:relative;max-width:var(--maxw);margin:0 auto;padding:48px var(--margin);}
 .grid{display:grid;grid-template-columns:repeat(var(--cols),1fr);column-gap:var(--gutter);row-gap:var(--lh);}
-.band{grid-column:1 / -1;display:grid;grid-template-columns:subgrid;column-gap:var(--gutter);align-items:start;}
-@supports not (grid-template-columns:subgrid){.band{grid-template-columns:repeat(var(--cols),1fr);}}
-.kicker{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:var(--bl);}
-.masthead{font-weight:900;font-size:88px;line-height:88px;letter-spacing:-0.04em;color:var(--ink);grid-column:1 / 9;}
-.tagline{grid-column:1 / 8;font-size:18px;line-height:var(--lh);color:var(--ink-soft);margin-top:var(--lh);}
-.rule{grid-column:1 / -1;height:var(--bl);border-top:2px solid var(--ink);margin-top:var(--lh);}
-h4{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--ink);margin-bottom:var(--bl);}
-.side{grid-column:1 / 4;}
-.mainarea{grid-column:4 / 13;}
-@media(max-width:900px){.side,.mainarea,.masthead,.tagline{grid-column:1 / -1;}.masthead{font-size:56px;line-height:56px;}}
-.modes{margin-bottom:var(--lh);}
-.mode-btn{display:block;width:100%;text-align:left;background:var(--paper);border:1px solid var(--ink);color:var(--ink);padding:12px 16px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:var(--bl);font-family:inherit;}
-.mode-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
-.notes{font-size:13px;color:var(--ink-soft);}
-.drop-zone{border:1px dashed var(--ink-soft);padding:48px 24px;text-align:center;cursor:pointer;margin-bottom:var(--lh);}
-.drop-zone.drag{border-color:var(--accent);background:var(--accent-soft);}
-.drop-zone strong{color:var(--accent);}
-.hide{display:none!important;}
-.controls{display:grid;grid-template-columns:1fr 1fr;gap:var(--gutter);margin-bottom:var(--lh);}
-.control label{display:block;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);margin-bottom:var(--bl);}
-input[type=range]{width:100%;accent-color:var(--accent);}
-.cam-btns{margin-bottom:var(--lh);}
-.btn{border:1px solid var(--ink);background:var(--paper);color:var(--ink);padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.05em;margin-right:var(--bl);font-family:'Space Mono',monospace;}
-.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
-.btn:disabled{opacity:0.3;cursor:not-allowed;}
-.canvas-wrap{position:relative;width:100%;min-height:360px;border:1px solid var(--ink);margin-bottom:var(--lh);display:flex;align-items:center;justify-content:center;background:var(--ink);}
-canvas{display:block;max-width:100%;height:auto;}
-video{display:none;}
-.status{display:flex;align-items:center;gap:12px;padding:16px;border:1px solid var(--ink);margin-bottom:var(--lh);font-family:'Space Mono',monospace;font-size:13px;}
-.status-dot{width:12px;height:12px;border-radius:50%;background:var(--ink-soft);flex:none;}
-.status-dot.on{background:var(--accent);}
-.status-dot.busy{background:var(--gold);}
-.status-dot.err{background:#c00;}
-.progress{height:var(--bl);background:#e9edff;overflow:hidden;margin-bottom:var(--lh);}
-.progress-bar{height:100%;background:var(--accent);width:0;}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gutter);margin-bottom:var(--lh);}
-.stat{border:1px solid var(--ink);padding:16px;}
-.stat-v{font-size:48px;font-weight:900;line-height:48px;letter-spacing:-0.03em;color:var(--accent);margin-bottom:var(--bl);}
-.stat-k{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);}
-.detlist{border-top:2px solid var(--ink);padding-top:12px;margin-bottom:var(--lh);}
-.det-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #e6e6e6;}
-.det-badge{background:var(--accent);color:#fff;padding:4px 8px;font-size:12px;font-weight:700;font-family:'Space Mono',monospace;}
-.legend{border:1px solid var(--ink);margin-top:var(--lh);}
-.legend-head{padding:12px;border-bottom:1px solid var(--ink);font-family:'Space Mono',monospace;font-weight:700;text-transform:uppercase;font-size:12px;letter-spacing:.1em;color:var(--accent);}
-.legend-row{display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid #eee;font-size:13px;}
-.legend-swatch{width:12px;height:12px;flex:none;}
-.disclaimer{grid-column:1 / -1;border-left:4px solid var(--accent);padding-left:24px;margin:var(--lh) 0;color:var(--ink-soft);font-size:13px;}
-.disclaimer strong{color:var(--ink);}
-footer{grid-column:1 / -1;border-top:2px solid var(--ink);padding-top:var(--lh);font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.05em;color:var(--ink-soft);}
-.toggle{position:fixed;top:18px;right:18px;z-index:200;display:flex;align-items:center;gap:10px;background:var(--ink);color:#fff;border:none;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:10px 14px;}
-.toggle .dot{width:8px;height:8px;border-radius:50%;background:#555;}
-.grid-on .toggle{background:var(--accent);}
-.grid-on .toggle .dot{background:#fff;}
-.guides{position:absolute;inset:0;pointer-events:none;z-index:60;opacity:0;transition:opacity .26s ease;}
-.grid-on .guides{opacity:1;}
-.guides .cols{position:absolute;top:0;bottom:0;left:var(--margin);right:var(--margin);display:grid;grid-template-columns:repeat(var(--cols),1fr);column-gap:var(--gutter);}
-.guides .col{background:var(--g-col);box-shadow:inset 1px 0 0 var(--g-edge),inset -1px 0 0 var(--g-edge);}
-.guides .rows{position:absolute;left:var(--margin);right:var(--margin);top:0;bottom:0;background-image:repeating-linear-gradient(to bottom,var(--g-base) 0 1px,transparent 1px var(--lh)),repeating-linear-gradient(to bottom,var(--g-base-min) 0 1px,transparent 1px var(--bl));}
+.kicker{font-family:'Consolas',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:var(--bl);grid-column:1 / 9;}
+.masthead{font-weight:900;font-size:64px;line-height:1.02;letter-spacing:-0.02em;color:var(--ink);grid-column:1 / 13;}
+.tagline{grid-column:1 / 9;font-size:18px;line-height:var(--lh);color:var(--ink-soft);margin-top:var(--bl);}
+hr.rule{grid-column:1 / 13;border:none;border-top:2px solid var(--ink);margin:24px 0 0;}
+.stage{grid-column:1 / 9;position:relative;background:#0b0e14;border:2px solid var(--ink);aspect-ratio:4/3;overflow:hidden;}
+.stage video,.stage canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;}
+.panel{grid-column:9 / 13;display:flex;flex-direction:column;gap:16px;}
+.card{border:2px solid var(--ink);padding:20px;}
+.card h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:12px;font-family:'Consolas',monospace;}
+.btn{display:block;width:100%;padding:14px;background:var(--accent);color:#fff;border:2px solid var(--accent);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;text-align:center;transition:background .15s;}
+.btn:hover{background:#0036c9;}
+.btn.secondary{background:#fff;color:var(--accent);}
+.btn.secondary:hover{background:var(--accent-soft);}
+input[type=file]{display:none;}
+.status{font-family:'Consolas',monospace;font-size:13px;color:var(--ink-soft);padding-top:8px;border-top:1px solid #ddd;margin-top:8px;}
+.status b{color:var(--ink);}
+.legend{display:flex;flex-wrap:wrap;gap:8px;}
+.chip{font-family:'Consolas',monospace;font-size:11px;padding:4px 8px;border:1px solid var(--ink);background:var(--accent-soft);}
+.foot{grid-column:1 / 13;margin-top:48px;padding-top:16px;border-top:2px solid var(--ink);font-family:'Consolas',monospace;font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;}
+@media(max-width:900px){
+.wrap{padding:32px 20px;}
+.masthead{font-size:36px;}
+.stage,.panel,.tagline,.kicker{grid-column:1 / 13;}
+}
 </style>
 </head>
 <body>
-<button class="toggle" id="gridToggle" aria-pressed="false"><span class="dot"></span><span class="lbl">Show grid</span></button>
-<section class="spread">
 <div class="wrap">
 <div class="grid">
-<div class="band" style="grid-column:1 / -1;">
-<div style="grid-column:1 / -1;" class="kicker">XRSign / YOLO · ONNX Runtime Web · 15 Classes</div>
+<div class="kicker">Real-Time Detection // ONNX Runtime Web</div>
 <h1 class="masthead">XRSign</h1>
-<p class="tagline">Real-time traffic sign and signal detection, computed entirely in the browser. No images leave your device.</p>
-<div class="rule"></div>
+<p class="tagline">Client-side traffic sign detection running entirely in your browser via YOLO + ONNX Runtime Web. No server, no upload.</p>
+<hr class="rule">
+
+<div class="stage" id="stage">
+<video id="video" autoplay muted playsinline style="display:none"></video>
+anvas id="canvas"></canvas>
 </div>
-<div class="band" style="grid-column:1 / -1;margin-top:var(--lh);">
-<aside class="side">
-<h4>Input
+
+<div class="panel">
+<div class="card">
+<h3>Input Source</h3>
+<button class="btn" id="camBtn">Start Camera</button>
+abel class="btn secondary" for="fileInput" style="margin-top:10px;">Upload Image</label>
+<input type="file" id="fileInput" accept="image/*">
+<div class="status" id="status"><b>Status:</b> <span id="statusText">Initializing…</span></div>
+</div>
+<div class="card">
+<h3>Classes</h3>
+<div class="legend" id="legend"></div>
+</div>
+</div>
+
+<div class="foot">
+<span>XRSign v1.0</span>
+<span id="fps">0 FPS</span>
+</div>
+</div>
+</div>
+
+<script>
+const CLASSES = ["Green Light","Red Light","Speed Limit 10","Speed Limit 100","Speed Limit 110","Speed Limit 120","Speed Limit 20","Speed Limit 30","Speed Limit 40","Speed Limit 50","Speed Limit 60","Speed Limit 70","Speed Limit 80","Speed Limit 90","Stop"];
+const INPUT_SIZE = 640;
+let session = null;
+let video = document.getElementById('video');
+let canvas = document.getElementById('canvas');
+let ctx = canvas.getContext('2d');
+let statusText = document.getElementById('statusText');
+let camBtn = document.getElementById('camBtn');
+let fileInput = document.getElementById('fileInput');
+let fpsEl = document.getElementById('fps');
+let running = false;
+let lastTime = performance.now();
+
+const legend = document.getElementById('legend');
+CLASSES.forEach(c=>{
+  const chip = document.createElement('div');
+  chip.className='chip';
+  chip.textContent=c;
+  legend.appendChild(chip);
+});
+
+function setStatus(t){ statusText.textContent = t; }
+
+async function loadModel(){
+  try{
+    setStatus('Loading model…');
+    session = await ort.InferenceSession.create('./best.onnx', { executionProviders: ['wasm'] });
+    setStatus('Ready — select an input');
+  }catch(e){
+    setStatus('Model load failed: ' + e.message);
+    console.error(e);
+  }
+}
+
+function letterbox(img, size){
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const cctx = c.getContext('2d');
+  cctx.fillStyle = '#727272';
+  cctx.fillRect(0,0,size,size);
+  const scale = Math.min(size/img.width, size/img.height);
+  const nw = img.width*scale, nh = img.height*scale;
+  const dx = (size-nw)/2, dy = (size-nh)/2;
+  cctx.drawImage(img, dx, dy, nw, nh);
+  return { canvas: c, scale, dx, dy };
+}
+
+function preprocess(c){
+  const cctx = c.getContext('2d');
+  const imgData = cctx.getImageData(0,0,c.width,c.height).data;
+  const size = c.width;
+  const float32 = new Float32Array(3*size*size);
+  for(let i=0;i<size*size;i++){
+    float32[i] = imgData[i*4]/255;
+    float32[size*size+i] = imgData[i*4+1]/255;
+    float32[2*size*size+i] = imgData[i*4+2]/255;
+  }
+  return new ort.Tensor('float32', float32, [1,3,size,size]);
+}
+
+function iou(a,b){
+  const x1=Math.max(a[0],b[0]), y1=Math.max(a[1],b[1]);
+  const x2=Math.min(a[2],b[2]), y2=Math.min(a[3],b[3]);
+  const inter=Math.max(0,x2-x1)*Math.max(0,y2-y1);
+  const areaA=(a[2]-a[0])*(a[3]-a[1]), areaB=(b[2]-b[0])*(b[3]-b[1]);
+  return inter/(areaA+areaB-inter);
+}
+
+function nms(boxes, scores, thresh){
+  const idx = scores.map((s,i)=>i).sort((a,b)=>scores[b]-scores[a]);
+  const keep = [];
+  while(idx.length){
+    const cur = idx.shift();
+    keep.push(cur);
+    for(let i=idx.length-1;i>=0;i--){
+      if(iou(boxes[cur], boxes[idx[i]]) > thresh) idx.splice(i,1);
+    }
+  }
+  return keep;
+}
+
+async function runInference(imgEl){
+  const { canvas: lb, scale, dx, dy } = letterbox(imgEl, INPUT_SIZE);
+  const tensor = preprocess(lb);
+  const feeds = {};
+  feeds[session.inputNames[0]] = tensor;
+  const results = await session.run(feeds);
+  const output = results[session.outputNames[0]];
+  const data = output.data;
+  const dims = output.dims;
+  const numBoxes = dims[2];
+  const numAttrs = dims[1];
+  const boxes=[], scores=[], classIds=[];
+  for(let i=0;i<numBoxes;i++){
+    let maxScore=0, maxClass=0;
+    for(let c=0;c<CLASSES.length;c++){
+      const s = data[(4+c)*numBoxes+i];45);
+  ctx.drawImage(imgEl,0,0,canvas.width,canvas.height);
+  ctx.lineWidth=3;
+  ctx.font='14px Consolas, monospace';
+  keep.forEach(i=>{
+    const [x1,y1,x2,y2]=boxes[i];
+    const label = CLASSES[classIds[i]] + ' ' + (scores[i]*100).toFixed(1) + '%';
+    ctx.strokeStyle = '#0047FF';
+    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = '#0047FF';
+    ctx.fillRect(x1, y1-20, tw+10, 20);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(label, x1+5, y1-5);
+  });
+}
+
+function resizeCanvasToImage(imgEl){
+  const stage = document.getElementById('stage');
+  const rect = stage.getBoundingClientRect();
+  canvas.width = imgEl.width || imgEl.videoWidth;
+  canvas.height = imgEl.height || imgEl.videoHeight;
+}
+
+async function processImageElement(imgEl){
+  resizeCanvasToImage(imgEl);
+  await runInference(imgEl);
+}
+
+fileInput.addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  running = false;
+  video.style.display='none';
+  const img = new Image();
+  img.onload = async ()=>{
+    setStatus('Running inference…');
+    await processImageElement(img);
+    setStatus('Ready — select an input');
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+camBtn.addEventListener('click', async ()=>{
+  if(running){
+    running = false;
+    const stream = video.srcObject;
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); }
+    video.style.display='none';
+    camBtn.textContent = 'Start Camera';
+    setStatus('Ready — select an input');
+    return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    video.style.display='block';
+    await video.play();
+    running = true;
+    camBtn.textContent = 'Stop Camera';
+    setStatus('Running…');
+    loopCamera();
+  }catch(e){
+    setStatus('Camera error: ' + e.message);
+  }
+});
+
+async function loopCamera(){
+  if(!running) return;
+  resizeCanvasToImage(video);
+  await runInference(video);
+  const now = performance.now();
+  const fps = 1000/(now-lastTime);
+  lastTime = now;
+  fpsEl.textContent = fps.toFixed(1) + ' FPS';
+  requestAnimationFrame(loopCamera);
+}
+
+loadModel();
+</script>
+</body>
+</html>
+
+      if(s>maxScore){ maxScore=s; maxClass=c; }
+    }
+    if(maxScore>0.35){
+      const cx=data[0*numBoxes+i], cy=data[1*numBoxes+i], w=data[2*numBoxes+i], h=data[3*numBoxes+i];
+      let x1=(cx-w/2-dx)/scale, y1=(cy-h/2-dy)/scale;
+      let x2=(cx+w/2-dx)/scale, y2=(cy+h/2-dy)/scale;
+      boxes.push([x1,y1,x2,y2]);
+      scores.push(maxScore);
+      classIds.push(maxClass);
+    }
+  }
+  const keep = nms(boxes, scores, 0.
